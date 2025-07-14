@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Storslagna Illusionen för Alice & Alva</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --glow-color: #ffafbd;
+            --primary-bg: #1c1c1c;
+            --secondary-bg: #251c2f;
+            --button-bg: #3a324e;
+        }
+        body {
+            background: linear-gradient(135deg, var(--primary-bg), var(--secondary-bg));
+            color: #f0f0f0;
+            font-family: 'VT323', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+            touch-action: none;
+        }
+        .container {
+            text-align: center;
+            width: 100%;
+            max-width: 700px;
+        }
+        h1 {
+            color: var(--glow-color);
+            font-size: 3.5rem;
+            text-shadow: 0 0 10px var(--glow-color);
+            margin-bottom: 0.5rem;
+        }
+        p {
+            font-size: 1.7rem;
+            margin-bottom: 1.5rem;
+            color: #ccc;
+        }
+        #illusionCanvas {
+            width: 700px;
+            height: 700px;
+            border: 4px dashed #666;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            background-color: rgba(0,0,0,0.2);
+            cursor: pointer;
+        }
+        
+        .controls {
+            margin: 1.5rem 0;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .mode-btn {
+            background-color: var(--button-bg);
+            color: #f0f0f0;
+            border: 2px solid #888;
+            border-radius: 12px;
+            padding: 10px 20px;
+            font-family: 'VT323', monospace;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .mode-btn:hover {
+            border-color: var(--glow-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(255, 175, 189, 0.2);
+        }
+        .mode-btn.active {
+            background-color: var(--glow-color);
+            color: var(--primary-bg);
+            border-color: var(--glow-color);
+        }
+
+        .emoji-palette {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .emoji {
+            width: 70px;
+            height: 70px;
+            font-size: 3rem;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid #666;
+            border-radius: 20px;
+            background-color: rgba(0,0,0,0.3);
+            transition: all 0.2s ease;
+        }
+        .emoji:active { cursor: grabbing; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Till Alice & Alva</h1>
+        <p>Välj ett läge och dra sedan en emoji till cirkeln!</p>
+        
+        <canvas id="illusionCanvas" width="700" height="700"></canvas>
+
+        <div class="controls">
+            <button class="mode-btn active" id="btn-normal">Normal</button>
+            <button class="mode-btn" id="btn-flower">Blomsterläge</button>
+            <button class="mode-btn" id="btn-stardust">Stjärnstoft</button>
+            <button class="mode-btn" id="btn-disco">Discoläge</button>
+        </div>
+        
+        <div class="emoji-palette">
+             <!-- Samma emojis som förut -->
+            <div class="emoji" draggable="true">✨</div><div class="emoji" draggable="true">💖</div><div class="emoji" draggable="true">🦄</div><div class="emoji" draggable="true">🌈</div><div class="emoji" draggable="true">🍓</div><div class="emoji" draggable="true">🍕</div><div class="emoji" draggable="true">🚀</div><div class="emoji" draggable="true">🌟</div>
+        </div>
+    </div>
+
+    <script>
+        // --- Grundinställningar ---
+        const canvas = document.getElementById('illusionCanvas');
+        const ctx = canvas.getContext('2d');
+        const modeButtons = document.querySelectorAll('.mode-btn');
+
+        // --- Animationsparametrar ---
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = canvas.width / 2 - 60;
+        const numLines = 12;
+        const speed = 0.05;
+        const dotSize = 12;
+        const emojiSize = "48px";
+        
+        let time = 0, hue = 0, currentEmoji = null, visibleElements = 0;
+        let currentMode = 'normal'; // Startläge
+        const dotHistories = Array(numLines).fill(0).map(() => []);
+        let particles = []; // För Stjärnstoft-läget
+
+        // --- Uppbyggnad av illusionen ---
+        const revealInterval = setInterval(() => {
+            if (visibleElements < numLines) visibleElements++;
+            else clearInterval(revealInterval);
+        }, 500);
+
+        // --- Animationsloopen ---
+        function animate() {
+            // Bakgrunden styrs av vilket läge som är aktivt
+            if (currentMode === 'disco') {
+                ctx.fillStyle = 'rgba(28, 28, 28, 0.1)'; // Långa svansar
+            } else {
+                ctx.fillStyle = 'rgba(28, 28, 28, 0.35)'; // Normal, subtilare svans
+            }
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Rita partiklar (om vi är i Stjärnstoft-läget)
+            if (currentMode === 'stardust') {
+                updateAndDrawParticles();
+            }
+
+            // Loopa igenom synliga element
+            for (let i = 0; i < visibleElements; i++) {
+                let x, y;
+                const angle = (i / numLines) * Math.PI;
+
+                // --- Beräkna position baserat på aktivt läge ---
+                if (currentMode === 'flower') {
+                    // Radien pulserar för att skapa en blomma
+                    const dynamicRadius = radius * (0.7 + 0.3 * Math.sin(time));
+                    const distance = Math.sin(time + angle) * dynamicRadius;
+                    x = centerX + Math.cos(angle) * distance;
+                    y = centerY + Math.sin(angle) * distance;
+                } else {
+                    // Normal cirkelrörelse
+                    const distance = Math.sin(time + angle) * radius;
+                    x = centerX + Math.cos(angle) * distance;
+                    y = centerY + Math.sin(angle) * distance;
+                }
+
+                // Skapa partiklar i Stjärnstoft-läget
+                if (currentMode === 'stardust' && Math.random() > 0.5) {
+                    createParticle(x, y, i);
+                }
+
+                // --- RITA DEN TYDLIGA Figuren OVANPÅ ---
+                ctx.globalAlpha = 1.0;
+                let currentFill = (currentMode === 'disco') ? `hsl(${Math.random() * 360}, 90%, 65%)` : `hsl(${hue + i * 30}, 90%, 65%)`;
+
+                if (currentEmoji) {
+                    ctx.font = emojiSize + ' sans-serif';
+                    ctx.fillStyle = 'white';
+                    ctx.fillText(currentEmoji, x, y);
+                } else {
+                    ctx.fillStyle = currentFill;
+                    ctx.beginPath();
+                    ctx.arc(x, y, dotSize, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+            time += speed;
+            hue++;
+            requestAnimationFrame(animate);
+        }
+
+        // --- Funktioner för Stjärnstoft-läget ---
+        function createParticle(x, y, i) {
+            const life = Math.random() * 60 + 40; // Livslängd i frames
+            particles.push({
+                x, y, life, maxLife: life,
+                color: `hsl(${hue + i * 30}, 90%, 65%)`,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2
+            });
+        }
+        function updateAndDrawParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life--;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.globalAlpha = p.life / p.maxLife * 0.8;
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+            ctx.globalAlpha = 1.0; // Återställ
+        }
+        
+        // --- Knapp- & Interaktionslogik ---
+        modeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Ta bort 'active' från alla knappar
+                modeButtons.forEach(btn => btn.classList.remove('active'));
+                // Lägg till 'active' på den klickade
+                button.classList.add('active');
+                // Sätt nytt läge
+                currentMode = button.id.replace('btn-', '');
+                // Rensa partiklar vid lägesbyte
+                if(currentMode !== 'stardust') particles = [];
+            });
+        });
+        
+        // --- Drag & Drop-logik (oförändrad) ---
+        // (Samma kod som tidigare för att hantera drag & drop av emojis)
+        const emojis = document.querySelectorAll('.emoji');
+        function handleDrop(emoji) { currentEmoji = emoji; }
+        emojis.forEach(emoji => { emoji.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', emoji.textContent)); });
+        canvas.addEventListener('dragover', e => e.preventDefault());
+        canvas.addEventListener('drop', e => { e.preventDefault(); handleDrop(e.dataTransfer.getData('text/plain')); });
+        let draggedEmoji = null;
+        emojis.forEach(emoji => { emoji.addEventListener('touchstart', e => { draggedEmoji = emoji.textContent; }); emoji.addEventListener('touchend', () => { draggedEmoji = null; }); });
+        canvas.addEventListener('touchmove', e => { e.preventDefault(); if (draggedEmoji) { const touch = e.touches[0]; const rect = canvas.getBoundingClientRect(); if (touch.clientX > rect.left && touch.clientX < rect.right && touch.clientY > rect.top && touch.clientY < rect.bottom) { canvas.classList.add('over'); } else { canvas.classList.remove('over'); } } });
+        canvas.addEventListener('touchend', e => { e.preventDefault(); if (draggedEmoji && canvas.classList.contains('over')) { handleDrop(draggedEmoji); } canvas.classList.remove('over'); draggedEmoji = null; });
+
+        // --- Starta allt ---
+        animate();
+    </script>
+</body>
+</html>
